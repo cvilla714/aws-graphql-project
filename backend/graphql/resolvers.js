@@ -1,103 +1,105 @@
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const secretKey = 'your_secret_key'; // Ensure this is secure
 const saltRounds = 10; // Define the number of salt rounds for bcrypt
+
+// Initialize S3 client
+const s3 = new S3Client({ region: 'us-east-1' });
 
 const resolvers = {
   Query: {
     users: async (_, __, { pool }) => {
       try {
         const res = await pool.query('SELECT * FROM users');
-        console.log("Query result for users: ", res.rows); // Add log to track query results
         return res.rows;
       } catch (err) {
-        console.error("Error fetching users: ", err);
+        console.error('Error fetching users: ', err);
         throw new Error('Unable to fetch users');
       }
     },
     photos: async (_, __, { pool }) => {
       try {
         const res = await pool.query('SELECT * FROM photos');
-        console.log("Query result for photos: ", res.rows); // Add log to track query results
         return res.rows;
       } catch (err) {
-        console.error("Error fetching photos: ", err);
+        console.error('Error fetching photos: ', err);
         throw new Error('Unable to fetch photos');
       }
     },
   },
   Mutation: {
-    // Register a new user
     addUser: async (_, { username, email, password }, { pool }) => {
       try {
-        // Hash the password before saving it to the database
         const hashedPassword = await bcrypt.hash(password, saltRounds);
-        console.log("Hashed password: ", hashedPassword); // Add log for hashed password
-
-        // Insert the new user into the database with the hashed password
         const res = await pool.query('INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING *', [username, email, hashedPassword]);
-        console.log("New user inserted: ", res.rows[0]); // Add log for new user insertion
         return res.rows[0];
       } catch (err) {
-        console.error("Error adding user: ", err);
+        console.error('Error adding user: ', err);
         throw new Error('Error registering new user');
       }
     },
 
-    // Upload a photo mutation
-    uploadPhoto: async (_, { title, imgSrc }, { pool }) => {
-      try {
-        const res = await pool.query('INSERT INTO photos (title, imgSrc) VALUES ($1, $2) RETURNING *', [title, imgSrc]);
-        console.log("New photo inserted: ", res.rows[0]); // Add log for new photo insertion
-        return res.rows[0];
-      } catch (err) {
-        console.error("Error uploading photo: ", err);
-        throw new Error('Error uploading photo');
-      }
-    },
-
-    // User login mutation
     login: async (_, { username, password }, { pool }) => {
       try {
-        // Debugging log to check pool availability
-        console.log("Pool object: ", pool);  
-        if (!pool) {
-          throw new Error("Database pool not initialized.");
-        }
-        console.log("Login attempt for username: ", username);
-        console.log("Password provided: ", password);
-
-        // Check if the user exists
         const res = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-        console.log("Query result for database: ", res.rows);
-
         const user = res.rows[0];
 
         if (!user) {
-          console.log("User not found");
           throw new Error('User not found');
         }
 
-        // Compare the hashed password stored in the database with the one provided by the user
         const validPassword = await bcrypt.compare(password, user.password);
-        console.log("Password validation result: ", validPassword);
 
         if (!validPassword) {
-          console.log("Invalid credentials");
           throw new Error('Invalid credentials');
         }
 
-        // Generate a token upon successful login
-        const token = jwt.sign({ username: user.username, email: user.email }, secretKey, {
+        const token = jwt.sign({ userId: user.id, username: user.username, email: user.email }, secretKey, {
           expiresIn: '1h',
         });
 
-        console.log("Login successful, token generated: ", token);
-
         return { token };
       } catch (err) {
-        console.error("Error during login: ", err);
+        console.error('Error during login: ', err);
         throw new Error('Login failed');
+      }
+    },
+
+    // Mutation for uploading image to S3
+    uploadImage: async (_, { file, userId }, { pool }) => {
+      const { filename, mimetype, createReadStream } = await file;
+
+      // Stream the file
+      const fileStream = createReadStream();
+      const bucketName = 'devkc-portfolio-dev'; // Replace with your S3 bucket name
+
+      // Define S3 upload parameters
+      const uploadParams = {
+        Bucket: bucketName,
+        Key: filename, // The name of the file in the bucket
+        Body: fileStream,
+        ContentType: mimetype,
+      };
+
+      try {
+        // Upload the file to S3
+        const data = await s3.send(new PutObjectCommand(uploadParams));
+        console.log('File uploaded successfully', data);
+
+        // Create S3 URL
+        const s3Url = `https://${bucketName}.s3.amazonaws.com/${filename}`;
+
+        // Insert into the 'images' table
+        const res = await pool.query('INSERT INTO images (user_id, image_url, created_at) VALUES ($1, $2, NOW()) RETURNING *', [userId, s3Url]);
+
+        return {
+          url: s3Url,
+          message: 'Image uploaded successfully!',
+        };
+      } catch (err) {
+        console.error('Error uploading image to S3: ', err);
+        throw new Error('Error uploading image to S3');
       }
     },
   },
