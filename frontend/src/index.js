@@ -10,7 +10,7 @@ import Dashboard from './pages/Dashboard'; // Make sure these paths are correct
 
 // Initialize Apollo Client
 const client = new ApolloClient({
-  uri: 'http://localhost:4000/graphql',
+  uri: 'http://52.91.7.221:4000/graphql',
   cache: new InMemoryCache(),
 });
 
