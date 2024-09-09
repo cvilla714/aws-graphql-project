@@ -10,7 +10,7 @@ let pool;
 
 async function getSecretAndConnect() {
   if (process.env.NODE_ENV !== 'production') {
-    // Use local .env file for testing
+    console.log("Using local .env file for PostgreSQL connection");
     pool = new Pool({
       user: process.env.DB_USER,
       host: process.env.DB_HOST,
@@ -18,8 +18,15 @@ async function getSecretAndConnect() {
       password: process.env.DB_PASSWORD,
       port: process.env.DB_PORT,
     });
+    console.log({
+      user: process.env.DB_USER,
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+      port: process.env.DB_PORT,
+    });
   } else {
     try {
+      console.log("Retrieving credentials from AWS Secrets Manager");
       const secret_name = 'aws-graphql-project-credentials';
       const client = new SecretsManagerClient({ region: 'us-east-1' });
       const data = await client.send(new GetSecretValueCommand({ SecretId: secret_name }));
@@ -39,6 +46,13 @@ async function getSecretAndConnect() {
         password: secret.DB_PASSWORD,
         port: secret.DB_PORT,
       });
+
+      console.log({
+        user: secret.DB_USER,
+        host: secret.DB_HOST,
+        database: secret.DB_NAME,
+        port: secret.DB_PORT,
+      });
     } catch (err) {
       console.error('Error retrieving secret from AWS Secrets Manager: ', err);
     }
@@ -48,7 +62,11 @@ async function getSecretAndConnect() {
     console.log('Connected to the PostgreSQL database');
   });
 
-  module.exports = { pool };
+  pool.on('error', (err) => {
+    console.error('PostgreSQL connection error:', err);
+  });
+
+  return pool; // Return the pool when it's successfully initialized
 }
 
-getSecretAndConnect();
+module.exports = { getSecretAndConnect };

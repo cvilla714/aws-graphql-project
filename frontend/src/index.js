@@ -10,10 +10,7 @@ import Dashboard from './pages/Dashboard'; // Make sure these paths are correct
 
 // Initialize Apollo Client
 const client = new ApolloClient({
-  uri:
-    process.env.NODE_ENV === 'production'
-      ? 'http://52.91.7.221:4000/graphql' // Production endpoint
-      : 'http://localhost:4000/graphql', // Local development endpoint
+  uri:'http://52.91.7.221:4000/graphql', // Production endpoint
   cache: new InMemoryCache(),
 });
 
