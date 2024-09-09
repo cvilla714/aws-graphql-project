@@ -17,5 +17,12 @@ const server = new ApolloServer({
 server.start().then(() => {
   server.applyMiddleware({ app });
 
-  app.listen({ port: 4000 }, () => console.log(`🚀 Server ready at http://52.91.7.221:4000${server.graphqlPath}`));
+  // Determine the correct URL based on the environment
+  const PORT = 4000;
+  const serverUrl =
+    process.env.NODE_ENV === 'production'
+      ? `http://52.91.7.221:${PORT}${server.graphqlPath}` // Production URL (change to EC2 IP or domain)
+      : `http://localhost:${PORT}${server.graphqlPath}`; // Development URL
+
+  app.listen({ port: PORT }, () => console.log(`🚀 Server ready at ${serverUrl}`));
 });

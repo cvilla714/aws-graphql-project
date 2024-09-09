@@ -1,42 +1,54 @@
 const { Pool } = require('pg');
 const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
+const dotenv = require('dotenv');
 
-// AWS Secrets Manager configuration
-const secret_name = 'aws-graphql-project-credentials'; // Use your secret name
-const client = new SecretsManagerClient({ region: 'us-east-1' }); // Adjust region if necessary
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config(); // Load .env file locally
+}
 
 let pool;
 
 async function getSecretAndConnect() {
-  try {
-    const data = await client.send(new GetSecretValueCommand({ SecretId: secret_name }));
-
-    let secret;
-    if ('SecretString' in data) {
-      secret = JSON.parse(data.SecretString); // Parse the secret JSON
-    } else {
-      let buff = new Buffer(data.SecretBinary, 'base64');
-      secret = JSON.parse(buff.toString('ascii'));
-    }
-
-    // Create PostgreSQL connection pool using the retrieved secret values
+  if (process.env.NODE_ENV !== 'production') {
+    // Use local .env file for testing
     pool = new Pool({
-      user: secret.DB_USER,
-      host: secret.DB_HOST,
-      database: secret.DB_NAME,
-      password: secret.DB_PASSWORD,
-      port: secret.DB_PORT,
+      user: process.env.DB_USER,
+      host: process.env.DB_HOST,
+      database: process.env.DB_NAME,
+      password: process.env.DB_PASSWORD,
+      port: process.env.DB_PORT,
     });
+  } else {
+    try {
+      const secret_name = 'aws-graphql-project-credentials';
+      const client = new SecretsManagerClient({ region: 'us-east-1' });
+      const data = await client.send(new GetSecretValueCommand({ SecretId: secret_name }));
 
-    pool.on('connect', () => {
-      console.log('Connected to the PostgreSQL database');
-    });
+      let secret;
+      if ('SecretString' in data) {
+        secret = JSON.parse(data.SecretString);
+      } else {
+        let buff = new Buffer(data.SecretBinary, 'base64');
+        secret = JSON.parse(buff.toString('ascii'));
+      }
 
-    module.exports = { pool };
-  } catch (err) {
-    console.error('Error retrieving secret from AWS Secrets Manager: ', err);
+      pool = new Pool({
+        user: secret.DB_USER,
+        host: secret.DB_HOST,
+        database: secret.DB_NAME,
+        password: secret.DB_PASSWORD,
+        port: secret.DB_PORT,
+      });
+    } catch (err) {
+      console.error('Error retrieving secret from AWS Secrets Manager: ', err);
+    }
   }
+
+  pool.on('connect', () => {
+    console.log('Connected to the PostgreSQL database');
+  });
+
+  module.exports = { pool };
 }
 
-// Call the async function to retrieve secrets and configure the pool
 getSecretAndConnect();
