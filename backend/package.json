@@ -9,6 +9,7 @@
   "author": "Cosmel Villalobos",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.645.0",
     "apollo-server-express": "^3.13.0",
     "bcrypt": "^5.1.1",
     "dotenv": "^16.4.5",
