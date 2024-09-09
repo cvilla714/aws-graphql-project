@@ -1,12 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom'; // Import useNavigate for redirection
-import { jwtDecode } from 'jwt-decode'; // Fix import for jwt-decode
+import { useNavigate } from 'react-router-dom';
+import { gql, useMutation } from '@apollo/client';
+import jwtDecode from 'jwt-decode';
+
+// Define the GraphQL mutation for image upload
+const UPLOAD_IMAGE = gql`
+  mutation uploadImage($file: Upload!, $userId: ID!) {
+    uploadImage(file: $file, userId: $userId) {
+      url
+      message
+    }
+  }
+`;
 
 const Dashboard = () => {
   const [image, setImage] = useState(null);
   const [message, setMessage] = useState('');
   const [username, setUsername] = useState('');
-  const navigate = useNavigate(); // Initialize useNavigate for redirection
+  const [preview, setPreview] = useState(null);
+  const navigate = useNavigate();
+
+  const [uploadImage] = useMutation(UPLOAD_IMAGE);
 
   // Decode the JWT to extract the username when the component loads
   useEffect(() => {
@@ -25,7 +39,9 @@ const Dashboard = () => {
   }, []);
 
   const handleImageChange = (e) => {
-    setImage(e.target.files[0]);
+    const file = e.target.files[0];
+    setImage(file);
+    setPreview(URL.createObjectURL(file)); // Show a preview of the selected image
   };
 
   const handleImageUpload = async (e) => {
@@ -36,30 +52,30 @@ const Dashboard = () => {
       return;
     }
 
-    const formData = new FormData();
-    formData.append('file', image);
-
     try {
-      const response = await fetch('http://localhost:4000/upload', {
-        method: 'POST',
-        body: formData,
+      const token = localStorage.getItem('token');
+      const decoded = jwtDecode(token);
+      const userId = decoded.userId;
+
+      const response = await uploadImage({
+        variables: {
+          file: image,
+          userId: userId,
+        },
       });
 
-      if (response.ok) {
+      if (response.data.uploadImage) {
         setMessage('Image uploaded successfully!');
-      } else {
-        setMessage('Image upload failed.');
       }
     } catch (error) {
       console.error('Error uploading image:', error);
-      setMessage('Error uploading image.');
+      setMessage('Image upload failed.');
     }
   };
 
-  // Handle sign out functionality
   const handleSignOut = () => {
-    localStorage.removeItem('token'); // Remove the token from localStorage
-    navigate('/login'); // Redirect to the login page
+    localStorage.removeItem('token');
+    navigate('/login');
   };
 
   return (
@@ -71,12 +87,12 @@ const Dashboard = () => {
         <h3>Upload an Image</h3>
         <form onSubmit={handleImageUpload}>
           <input type="file" onChange={handleImageChange} />
+          {preview && <img src={preview} alt="Image Preview" />}
           <button type="submit">Upload Image</button>
         </form>
         {message && <p>{message}</p>}
       </div>
 
-      {/* Sign Out Button */}
       <button onClick={handleSignOut} className="signout-button">
         Sign Out
       </button>
