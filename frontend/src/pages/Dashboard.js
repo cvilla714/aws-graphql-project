@@ -5,7 +5,7 @@ import { jwtDecode } from 'jwt-decode';
 
 // Define the GraphQL mutation for image upload
 const UPLOAD_IMAGE = gql`
-  mutation uploadImage($file: Upload!, $userId: ID!) {
+  mutation uploadImage($file: Upload!, $userId: Int!) {
     uploadImage(file: $file, userId: $userId) {
       url
       message
@@ -18,6 +18,7 @@ const Dashboard = () => {
   const [message, setMessage] = useState('');
   const [username, setUsername] = useState('');
   const [preview, setPreview] = useState(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState(null); // New state to store the uploaded image URL
   const navigate = useNavigate();
 
   const [uploadImage] = useMutation(UPLOAD_IMAGE);
@@ -57,15 +58,19 @@ const Dashboard = () => {
       const decoded = jwtDecode(token);
       const userId = decoded.userId;
 
+      // Wrap the image in a File object
+      const file = new File([image], image.name, { type: image.type });
       const response = await uploadImage({
         variables: {
-          file: image,
+          file: file, // Use the wrapped file
           userId: userId,
         },
       });
 
       if (response.data.uploadImage) {
-        setMessage('Image uploaded successfully!');
+        setPreview(response.data.uploadImage.url); 
+        setUploadedImageUrl(response.data.uploadImage.url); // Set the uploaded image URL to state
+        setMessage(response.data.uploadImage.message);
       }
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -91,6 +96,13 @@ const Dashboard = () => {
           <button type="submit">Upload Image</button>
         </form>
         {message && <p>{message}</p>}
+        
+        {/* Show the uploaded image URL */}
+        {uploadedImageUrl && (
+          <div>
+            <p>Image URL: <a href={uploadedImageUrl} target="_blank" rel="noopener noreferrer">{uploadedImageUrl}</a></p>
+          </div>
+        )}
       </div>
 
       <button onClick={handleSignOut} className="signout-button">
