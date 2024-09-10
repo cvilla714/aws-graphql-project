@@ -1,34 +1,32 @@
 const express = require('express');
 const { ApolloServer } = require('apollo-server-express');
-const cors = require('cors'); // Import cors
+const { graphqlUploadExpress } = require('graphql-upload'); // Ensure this is correct
+const cors = require('cors');
 const typeDefs = require('./graphql/schema');
 const resolvers = require('./graphql/resolvers');
-const { getSecretAndConnect } = require('./config/db'); // Import the async pool function
+const { getSecretAndConnect } = require('./config/db'); 
 require('dotenv').config();
 
 const app = express();
 
-// Ensure that the request body is parsed as JSON
-app.use(express.json());
+// Use the graphql-upload middleware for handling uploads
+app.use(graphqlUploadExpress({ maxFileSize: 10000000, maxFiles: 1 }));
 
-// Add CORS middleware to allow requests from your frontend URL
-app.use(
-  cors({
-    origin: 'http://54.83.91.201:3000', // Allow your frontend EC2 URL
-    credentials: true, // Allow cookies or credentials
-  }),
-);
+// Add CORS middleware to allow requests from your frontend
+app.use(cors({
+  origin: 'http://54.83.91.201:3000', 
+  credentials: true,
+}));
 
 async function startServer() {
-  // Wait for the pool to be initialized
   const pool = await getSecretAndConnect();
 
   if (!pool) {
     console.error('Database connection failed');
-    process.exit(1); // Exit if there's no database connection
+    process.exit(1);
   }
 
-  // Apollo Server setup
+  // Set up Apollo Server with schema, resolvers, and context
   const server = new ApolloServer({
     typeDefs,
     resolvers,
@@ -38,18 +36,16 @@ async function startServer() {
   await server.start();
   server.applyMiddleware({ app });
 
-  // Global error handler
+  // Error handling middleware
   app.use((err, req, res, next) => {
-    console.error('Error stack:', err.stack); // Log the error stack trace
+    console.error('Error stack:', err.stack); 
     res.status(500).send('Something went wrong!');
   });
 
-  // Determine the correct URL based on the environment
   const PORT = 4000;
-  const serverUrl =
-    process.env.NODE_ENV === 'production'
-      ? `http://54.83.91.201:${PORT}${server.graphqlPath}` // Production URL
-      : `http://localhost:${PORT}${server.graphqlPath}`; // Development URL
+  const serverUrl = process.env.NODE_ENV === 'production'
+    ? `http://54.83.91.201:${PORT}${server.graphqlPath}`
+    : `http://localhost:${PORT}${server.graphqlPath}`;
 
   app.listen({ port: PORT }, () => console.log(`🚀 Server ready at ${serverUrl}`));
 }
