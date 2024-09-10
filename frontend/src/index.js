@@ -11,7 +11,7 @@ import Dashboard from './pages/Dashboard';
 
 // Initialize Apollo Client with createUploadLink
 const client = new ApolloClient({
-  link: createUploadLink({ uri: 'http://52.91.7.221:4000/graphql' }), // Production GraphQL endpoint
+  link: createUploadLink({ uri: 'http://54.83.91.201:4000/graphql' }), // Production GraphQL endpoint
   cache: new InMemoryCache(),
 });
 
