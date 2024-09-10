@@ -1,4 +1,5 @@
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client } = require('@aws-sdk/client-s3');
+const { Upload } = require('@aws-sdk/lib-storage');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const secretKey = 'your_secret_key'; // Ensure this is secure
@@ -68,38 +69,55 @@ const resolvers = {
 
     // Mutation for uploading image to S3
     uploadImage: async (_, { file, userId }, { pool }) => {
-      const { filename, mimetype, createReadStream } = await file;
-
-      // Stream the file
-      const fileStream = createReadStream();
-      const bucketName = 'devkc-portfolio-dev'; // Replace with your S3 bucket name
-
-      // Define S3 upload parameters
-      const uploadParams = {
-        Bucket: bucketName,
-        Key: filename, // The name of the file in the bucket
-        Body: fileStream,
-        ContentType: mimetype,
-      };
-
       try {
+        // Resolve the file promise first
+        const resolvedFile = await file;
+
+        // Access the actual file inside the resolvedFile
+        const { createReadStream, filename, mimetype } = resolvedFile.file;
+
+        console.log("Resolved File:", resolvedFile);
+        console.log("User ID: ", userId);
+        console.log("Uploading file: ", filename);
+
+        if (!createReadStream) {
+          console.error('File upload object is not valid:', resolvedFile);
+          throw new Error('File upload not handled properly');
+        }
+
+        // Create a readable stream for the file
+        const fileStream = createReadStream();
+        const bucketName = 'devkc-portfolio-dev'; // Replace with your S3 bucket name
+
+        // Define the S3 upload parameters using Upload from @aws-sdk/lib-storage
+        const upload = new Upload({
+          client: s3,
+          params: {
+            Bucket: bucketName,
+            Key: filename, // The name of the file in the bucket
+            Body: fileStream,
+            ContentType: mimetype,
+          },
+        });
+
         // Upload the file to S3
-        const data = await s3.send(new PutObjectCommand(uploadParams));
+        const data = await upload.done();
         console.log('File uploaded successfully', data);
 
-        // Create S3 URL
+        // Create the S3 URL
         const s3Url = `https://${bucketName}.s3.amazonaws.com/${filename}`;
 
-        // Insert into the 'images' table
+        // Insert into the 'images' table in the database
         const res = await pool.query('INSERT INTO images (user_id, image_url, created_at) VALUES ($1, $2, NOW()) RETURNING *', [userId, s3Url]);
 
         return {
           url: s3Url,
           message: 'Image uploaded successfully!',
         };
+
       } catch (err) {
-        console.error('Error uploading image to S3: ', err);
-        throw new Error('Error uploading image to S3');
+        console.error('Error uploading image:', err);
+        throw new Error('Error uploading image');
       }
     },
   },
